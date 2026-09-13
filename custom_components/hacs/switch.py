@@ -6,13 +6,14 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
+from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .base import HacsBase
-from .const import DOMAIN
-from .entity import HacsRepositoryEntity
+from .const import DOMAIN, HACS_SYSTEM_ID
+from .entity import HacsRepositoryEntity, HacsSystemEntity
 from .repositories.base import HacsRepository
 
 
@@ -24,9 +25,47 @@ async def async_setup_entry(
     """Setup switch platform."""
     hacs: HacsBase = hass.data[DOMAIN]
     async_add_entities(
-        HacsRepositoryPreReleaseSwitchEntity(hacs=hacs, repository=repository)
-        for repository in hacs.repositories.list_downloaded
+        [
+            HacsAutoUpdateSwitchEntity(hacs=hacs),
+            *(
+                HacsRepositoryPreReleaseSwitchEntity(hacs=hacs, repository=repository)
+                for repository in hacs.repositories.list_downloaded
+            ),
+        ]
     )
+
+
+class HacsAutoUpdateSwitchEntity(HacsSystemEntity, SwitchEntity, RestoreEntity):
+    """Whether HACS updates may be installed unattended.
+
+    HACS does not act on this itself; it is the gate the Home Assistant
+    automations read before installing updates and restarting. It lives here so
+    the toggle sits on the HACS device with everything else it governs. State
+    is restored across restarts and defaults to on.
+    """
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:autorenew"
+    _attr_is_on = True
+    _attr_name = "Auto update"
+    _attr_unique_id = f"{HACS_SYSTEM_ID}_auto_update"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last state."""
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            self._attr_is_on = last_state.state == STATE_ON
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Allow unattended updates."""
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Hold unattended updates."""
+        self._attr_is_on = False
+        self.async_write_ha_state()
 
 
 class HacsRepositoryPreReleaseSwitchEntity(HacsRepositoryEntity, SwitchEntity):
