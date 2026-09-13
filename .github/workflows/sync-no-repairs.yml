@@ -1,0 +1,105 @@
+name: Sync no-repairs with upstream
+
+# Keeps this fork's `no-repairs` branch current with hacs/integration `main`,
+# carrying the repair/notification suppression patch forward. On a merge
+# conflict it stops and opens an issue rather than pushing something broken.
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-no-repairs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout no-repairs
+        uses: actions/checkout@v4
+        with:
+          ref: no-repairs
+          fetch-depth: 0
+
+      - name: Merge upstream/main
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/hacs/integration.git
+          git fetch --no-tags upstream main
+          before="$(git rev-parse HEAD)"
+          if ! git merge --no-edit upstream/main; then
+            git merge --abort || true
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "conflict=false" >> "$GITHUB_OUTPUT"
+          if [ "$before" = "$(git rev-parse HEAD)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Already up to date with upstream."
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the patch survived the merge
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          test -f custom_components/hacs/no_repairs.py
+          grep -q 'from .no_repairs import' custom_components/hacs/base.py
+          grep -q 'from ..no_repairs import' custom_components/hacs/repositories/integration.py
+          # No call site may reach the real helpers again.
+          ! grep -rn 'from homeassistant.helpers.issue_registry import .*async_create_issue' \
+              custom_components/hacs/base.py custom_components/hacs/repositories/integration.py
+          ! grep -rn 'from homeassistant.components.persistent_notification import' \
+              custom_components/hacs/base.py
+          python -m compileall -q custom_components/hacs
+
+      - name: Stamp the version and push
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          # Upstream keeps this at 0.0.0 and stamps it at release time, so our
+          # value never conflicts, and staying above the newest upstream release
+          # stops HACS offering to "update" this install back to stock.
+          version="$(date -u +%Y.%-m.%-d)"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$version\"/" custom_components/hacs/manifest.json
+          if ! git diff --quiet; then
+            git commit -am "Stamp version $version"
+          fi
+          git push origin no-repairs
+
+      - name: Open an issue on conflict
+        if: steps.merge.outputs.conflict == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'Upstream sync conflict on no-repairs';
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'sync-conflict',
+            });
+            if (existing.data.some(i => i.title === title)) return;
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title,
+              labels: ['sync-conflict'],
+              body: [
+                'Merging `hacs/integration@main` into `no-repairs` hit a conflict, so the branch was left unchanged.',
+                '',
+                'Resolve locally:',
+                '```',
+                'git fetch upstream main && git checkout no-repairs && git merge upstream/main',
+                '```',
+                'The patch is: `custom_components/hacs/no_repairs.py` plus the import lines in',
+                '`base.py` and `repositories/integration.py`.',
+              ].join('\n'),
+            });
