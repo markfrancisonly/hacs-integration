@@ -33,7 +33,7 @@ from .utils.store import STORE_CACHE_KEY
 from .utils.version import version_left_higher_or_equal_then_right
 from .websocket import async_register_websocket_commands
 
-PLATFORMS = [Platform.SWITCH, Platform.UPDATE]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SWITCH, Platform.UPDATE]
 
 
 async def _async_initialize_integration(
