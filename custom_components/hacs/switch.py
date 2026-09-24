@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON, EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -36,12 +36,12 @@ async def async_setup_entry(
 
 
 class HacsAutoUpdateSwitchEntity(HacsSystemEntity, SwitchEntity, RestoreEntity):
-    """Whether HACS updates may be installed unattended.
+    """Whether HACS installs updates unattended.
 
-    HACS does not act on this itself; it is the gate the Home Assistant
-    automations read before installing updates and restarting. It lives here so
-    the toggle sits on the HACS device with everything else it governs. State
-    is restored across restarts and defaults to on.
+    While on, every update entity downloads a new version as soon as HACS
+    learns of it, so nothing waits in Settings > Updates; what remains is the
+    restart, reported by the "Restart required" binary sensor. State is
+    restored across restarts and defaults to on.
     """
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -56,15 +56,27 @@ class HacsAutoUpdateSwitchEntity(HacsSystemEntity, SwitchEntity, RestoreEntity):
         await super().async_added_to_hass()
         if (last_state := await self.async_get_last_state()) is not None:
             self._attr_is_on = last_state.state == STATE_ON
+        self.hacs.system.auto_update = self._attr_is_on
+        if self._attr_is_on:
+            self._nudge_update_entities()
+
+    @callback
+    def _nudge_update_entities(self) -> None:
+        """Let the update entities act on anything already pending."""
+        for coordinator in self.hacs.coordinators.values():
+            coordinator.async_update_listeners()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Allow unattended updates."""
+        """Install updates unattended, starting with anything pending."""
         self._attr_is_on = True
+        self.hacs.system.auto_update = True
         self.async_write_ha_state()
+        self._nudge_update_entities()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Hold unattended updates."""
         self._attr_is_on = False
+        self.hacs.system.auto_update = False
         self.async_write_ha_state()
 
 

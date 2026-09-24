@@ -57,6 +57,8 @@ jobs:
           test -f custom_components/hacs/binary_sensor.py
           grep -q 'Platform.BINARY_SENSOR' custom_components/hacs/__init__.py
           grep -q 'HacsAutoUpdateSwitchEntity' custom_components/hacs/switch.py
+          grep -q '_auto_install_if_pending' custom_components/hacs/update.py
+          grep -q 'auto_update: bool' custom_components/hacs/base.py
           grep -q 'from .no_repairs import' custom_components/hacs/base.py
           grep -q 'from ..no_repairs import' custom_components/hacs/repositories/integration.py
           # No call site may reach the real helpers again.

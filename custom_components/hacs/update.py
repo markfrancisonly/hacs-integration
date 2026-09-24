@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
@@ -37,6 +38,7 @@ class HacsRepositoryUpdateEntity(HacsRepositoryEntity, UpdateEntity):
         | UpdateEntityFeature.PROGRESS
         | UpdateEntityFeature.RELEASE_NOTES
     )
+    _auto_install_task: asyncio.Task | None = None
 
     @property
     def name(self) -> str | None:
@@ -144,6 +146,38 @@ class HacsRepositoryUpdateEntity(HacsRepositoryEntity, UpdateEntity):
                 self._update_download_progress,
             )
         )
+        self._auto_install_if_pending()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        super()._handle_coordinator_update()
+        self._auto_install_if_pending()
+
+    @callback
+    def _auto_install_if_pending(self) -> None:
+        """Download a new version as soon as it is known, if auto update is on."""
+        if (
+            not self.hacs.system.auto_update
+            or self._auto_install_task is not None
+            or self._attr_in_progress
+            or not self.available
+            or self.installed_version == self.latest_version
+        ):
+            return
+        self._auto_install_task = self.hass.async_create_task(self._async_auto_install())
+
+    async def _async_auto_install(self) -> None:
+        """Install the latest version, logging instead of raising."""
+        try:
+            await self.async_install(version=None, backup=False)
+        except HomeAssistantError as exception:
+            self.hacs.log.warning(
+                "Auto update of %s failed: %s", self.repository.data.full_name, exception
+            )
+        finally:
+            self._auto_install_task = None
+            self.async_write_ha_state()
 
     @callback
     def _update_download_progress(self, data: dict) -> None:

@@ -183,6 +183,8 @@ class HacsSystem:
 
     disabled_reason: HacsDisabledReason | None = None
     running: bool = False
+    # Download a repository's new version as soon as it is known (switch).
+    auto_update: bool = False
     stage = HacsStage.SETUP
     action: bool = False
     generator: bool = False
