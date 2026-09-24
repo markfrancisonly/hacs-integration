@@ -114,6 +114,10 @@ class HacsConfiguration:
 
     appdaemon_path: str = "appdaemon/apps/"
     appdaemon: bool = False
+    # Install updates unattended: downloads happen as soon as a new version is
+    # known, repairs and notifications are not raised, and a pending restart is
+    # reported by a binary sensor instead. Off = stock behaviour.
+    auto_update: bool = False
     config: dict[str, Any] = field(default_factory=dict)
     config_entry: ConfigEntry | None = None
     country: str = "ALL"
@@ -183,7 +187,7 @@ class HacsSystem:
 
     disabled_reason: HacsDisabledReason | None = None
     running: bool = False
-    # Download a repository's new version as soon as it is known (switch).
+    # The "Auto update" switch: a hold on unattended installs while it is off.
     auto_update: bool = False
     stage = HacsStage.SETUP
     action: bool = False

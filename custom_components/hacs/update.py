@@ -158,7 +158,8 @@ class HacsRepositoryUpdateEntity(HacsRepositoryEntity, UpdateEntity):
     def _auto_install_if_pending(self) -> None:
         """Download a new version as soon as it is known, if auto update is on."""
         if (
-            not self.hacs.system.auto_update
+            not self.hacs.configuration.auto_update
+            or not self.hacs.system.auto_update
             or self._auto_install_task is not None
             or self._attr_in_progress
             or not self.available

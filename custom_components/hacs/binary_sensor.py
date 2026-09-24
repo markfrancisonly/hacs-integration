@@ -23,6 +23,8 @@ async def async_setup_entry(
 ) -> None:
     """Setup binary sensor platform."""
     hacs: HacsBase = hass.data[DOMAIN]
+    if not hacs.configuration.auto_update:
+        return
     async_add_entities([HacsRestartRequiredBinarySensor(hacs=hacs)])
 
 

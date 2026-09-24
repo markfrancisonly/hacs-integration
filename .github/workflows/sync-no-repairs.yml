@@ -59,6 +59,7 @@ jobs:
           grep -q 'HacsAutoUpdateSwitchEntity' custom_components/hacs/switch.py
           grep -q '_auto_install_if_pending' custom_components/hacs/update.py
           grep -q 'auto_update: bool' custom_components/hacs/base.py
+          grep -q 'AUTO_UPDATE' custom_components/hacs/config_flow.py
           grep -q 'from .no_repairs import' custom_components/hacs/base.py
           grep -q 'from ..no_repairs import' custom_components/hacs/repositories/integration.py
           # No call site may reach the real helpers again.

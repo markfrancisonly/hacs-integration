@@ -26,6 +26,7 @@ from .base import HacsBase
 from .const import CLIENT_ID, DOMAIN, LOCALE, MINIMUM_HA_VERSION
 from .utils.configuration_schema import (
     APPDAEMON,
+    AUTO_UPDATE,
     COUNTRY,
     SIDEPANEL_ICON,
     SIDEPANEL_TITLE,
@@ -220,6 +221,7 @@ class HacsOptionsFlowHandler(OptionsFlow):
             vol.Optional(SIDEPANEL_ICON, default=hacs.configuration.sidepanel_icon): str,
             vol.Optional(COUNTRY, default=hacs.configuration.country): vol.In(LOCALE),
             vol.Optional(APPDAEMON, default=hacs.configuration.appdaemon): bool,
+            vol.Optional(AUTO_UPDATE, default=hacs.configuration.auto_update): bool,
         }
 
         return self.async_show_form(step_id="user", data_schema=vol.Schema(schema))

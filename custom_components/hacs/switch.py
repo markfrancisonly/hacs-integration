@@ -26,7 +26,7 @@ async def async_setup_entry(
     hacs: HacsBase = hass.data[DOMAIN]
     async_add_entities(
         [
-            HacsAutoUpdateSwitchEntity(hacs=hacs),
+            *([HacsAutoUpdateSwitchEntity(hacs=hacs)] if hacs.configuration.auto_update else []),
             *(
                 HacsRepositoryPreReleaseSwitchEntity(hacs=hacs, repository=repository)
                 for repository in hacs.repositories.list_downloaded
