@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base import HacsBase
 from .const import DOMAIN
 from .entity import HacsRepositoryEntity
-from .enums import HacsCategory, HacsDispatchEvent
+from .enums import HacsCategory, HacsDispatchEvent, HacsGitHubRepo
 from .exceptions import HacsException
 
 
@@ -156,10 +156,14 @@ class HacsRepositoryUpdateEntity(HacsRepositoryEntity, UpdateEntity):
 
     @callback
     def _auto_install_if_pending(self) -> None:
-        """Download a new version as soon as it is known, if auto update is on."""
+        """Download a new version as soon as it is known, if auto update is on.
+
+        HACS itself is never installed unattended: replacing the running
+        integration from under Home Assistant is a deliberate act."""
         if (
             not self.hacs.configuration.auto_update
             or not self.hacs.system.auto_update
+            or self.repository.data.full_name == HacsGitHubRepo.INTEGRATION
             or self._auto_install_task is not None
             or self._attr_in_progress
             or not self.available
