@@ -49,7 +49,7 @@
                     "appdaemon": "Enable AppDaemon apps discovery & tracking",
                     "sidepanel_icon": "Side panel icon",
                     "sidepanel_title": "Side panel title",
-                    "auto_update": "Install updates automatically (no repairs or notifications; a Restart required sensor instead)"
+                    "auto_update": "Install updates automatically (no repairs or notifications)"
                 }
             }
         }
