@@ -198,6 +198,8 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         hacs.log.warning("Pending tasks, can not unload, try again later.")
         return False
 
+    await hacs.auto_update.async_stop()
+
     # Clear out pending queue
     hacs.queue.clear()
 

@@ -64,8 +64,7 @@ jobs:
           test -f custom_components/hacs/binary_sensor.py
           grep -q 'Platform.BINARY_SENSOR' custom_components/hacs/__init__.py
           grep -q 'HacsAutoUpdateSwitchEntity' custom_components/hacs/switch.py
-          grep -q '_auto_install_if_pending' custom_components/hacs/update.py
-          grep -q 'not self.repository.pending_update' custom_components/hacs/update.py
+          test -f custom_components/hacs/auto_update.py
           grep -q 'auto_update: bool' custom_components/hacs/base.py
           grep -q 'AUTO_UPDATE' custom_components/hacs/config_flow.py
           grep -q 'from .no_repairs import' custom_components/hacs/base.py
@@ -79,6 +78,31 @@ jobs:
           ! grep -rn 'from homeassistant.components.persistent_notification import' \
               custom_components/hacs/base.py
           python -m compileall -q custom_components/hacs
+
+      - name: Set up minimum supported Python
+        if: steps.merge.outputs.conflict == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Test automatic updates with minimum supported Home Assistant
+        if: steps.merge.outputs.conflict == 'false'
+        run: |
+          scripts/install/pip_packages --requirement requirements_core_min.txt --requirement requirements_base.txt
+          scripts/install/frontend
+          python -m unittest discover -s tests_fork -v
+
+      - name: Set up current Python
+        if: steps.merge.outputs.conflict == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Test automatic updates with current Home Assistant
+        if: steps.merge.outputs.conflict == 'false'
+        run: |
+          scripts/install/pip_packages homeassistant --requirement requirements_base.txt
+          python -m unittest discover -s tests_fork -v
 
       - name: Push the merge
         if: steps.merge.outputs.changed == 'true'
@@ -103,12 +127,6 @@ jobs:
           done
           echo "release=true" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Python
-        if: steps.decide.outputs.release == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
 
       # As upstream's publish job: the version is stamped into the zip only.
       - name: Build hacs.zip
@@ -153,7 +171,7 @@ jobs:
                 '```',
                 'git fetch upstream main && git checkout no-repairs && git merge upstream/main',
                 '```',
-                'The patch is: `custom_components/hacs/no_repairs.py` plus the import lines in',
-                '`base.py` and `repositories/integration.py`.',
+                'Run the fork regression tests before publishing:',
+                '`python -m unittest discover -s tests_fork -v`.',
               ].join('\n'),
             });

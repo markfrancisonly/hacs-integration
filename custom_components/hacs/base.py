@@ -33,6 +33,7 @@ from homeassistant.helpers.event import async_call_later, async_track_time_inter
 from homeassistant.loader import Integration
 from homeassistant.util import dt
 
+from .auto_update import HacsAutoUpdate
 from .const import DOMAIN, TV, URL_BASE
 from .coordinator import HacsUpdateCoordinator
 from .data_client import HacsDataClient
@@ -387,6 +388,7 @@ class HacsBase:
         self.repositories = HacsRepositories()
         self.status = HacsStatus()
         self.system = HacsSystem()
+        self.auto_update = HacsAutoUpdate(self)
 
     @property
     def integration_dir(self) -> pathlib.Path:
@@ -763,6 +765,11 @@ class HacsBase:
 
     async def async_recreate_entities(self) -> None:
         """Recreate entities."""
+        async with self.auto_update.async_paused():
+            await self._async_recreate_entities()
+
+    async def _async_recreate_entities(self) -> None:
+        """Unload and set up the update platform."""
         platforms = [Platform.UPDATE]
 
         # Workaround for core versions without https://github.com/home-assistant/core/pull/117084
@@ -820,7 +827,9 @@ class HacsBase:
         try:
             await repository.update_repository(ignore_issues=True, force=True)
         except HacsException as exception:
-            self.log.warning("Could not check %s for a new release: %s", repository.string, exception)
+            self.log.warning(
+                "Could not check %s for a new release: %s", repository.string, exception
+            )
             return
         await self.data.async_write()
         self.coordinators[repository.data.category].async_update_listeners()
