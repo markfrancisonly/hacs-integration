@@ -22,5 +22,5 @@
     "requirements": [
         "aiogithubapi>=22.10.1"
     ],
-    "version": "2026.9.25"
+    "version": "2026.9.25.1"
 }
