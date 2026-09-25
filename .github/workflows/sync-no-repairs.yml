@@ -1,7 +1,8 @@
 name: Sync no-repairs with upstream
 
-# Keeps this fork's `no-repairs` branch current with hacs/integration `main`,
-# carrying the auto-update patch forward, and publishes a release (hacs.zip)
+# Keeps this fork's `no-repairs` branch current with hacs/integration's latest
+# RELEASE (never unreleased main), carrying the auto-update patch forward, and
+# publishes a release (hacs.zip)
 # whenever the component changed since the last tag. HACS installs from these
 # releases: the fork points its own-repository constant at this repo. On a
 # merge conflict it stops and opens an issue rather than pushing something broken.
@@ -34,16 +35,18 @@ jobs:
           ref: no-repairs
           fetch-depth: 0
 
-      - name: Merge upstream/main
+      - name: Merge the latest upstream release
         id: merge
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/hacs/integration.git
-          git fetch --no-tags upstream main
+          tag="$(gh api repos/hacs/integration/releases/latest --jq .tag_name)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git fetch --no-tags upstream "refs/tags/$tag"
           before="$(git rev-parse HEAD)"
-          if ! git merge --no-edit upstream/main; then
+          if ! git merge --no-edit -m "Merge hacs/integration $tag" FETCH_HEAD; then
             git merge --abort || true
             echo "conflict=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -51,7 +54,7 @@ jobs:
           echo "conflict=false" >> "$GITHUB_OUTPUT"
           if [ "$before" = "$(git rev-parse HEAD)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Already up to date with upstream."
+            echo "Already contains hacs/integration $tag."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -113,7 +116,8 @@ jobs:
         if: steps.merge.outputs.conflict == 'false'
         run: |
           set -euo pipefail
-          last="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          # Only this fork's date tags; upstream's own tags are in the repository too.
+          last="$(git tag -l '20[0-9][0-9].*' --sort=-v:refname | head -1)"
           if [ -n "$last" ] && git diff --quiet "$last" HEAD -- custom_components hacs.json; then
             echo "release=false" >> "$GITHUB_OUTPUT"
             echo "No component change since $last."
@@ -147,14 +151,14 @@ jobs:
           VERSION: ${{ steps.decide.outputs.version }}
         run: |
           gh release create "$VERSION" hacs.zip --target "$(git rev-parse HEAD)" --title "$VERSION" \
-            --notes "hacs/integration main as of $(date -u +%F), with the auto-update patch."
+            --notes "hacs/integration ${{ steps.merge.outputs.tag }} with the auto-update patch."
 
       - name: Open an issue on conflict
         if: steps.merge.outputs.conflict == 'true'
         uses: actions/github-script@v7
         with:
           script: |
-            const title = 'Upstream sync conflict on no-repairs';
+            const title = 'Upstream release merge conflict on no-repairs';
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,
               state: 'open', labels: 'sync-conflict',
@@ -165,11 +169,11 @@ jobs:
               title,
               labels: ['sync-conflict'],
               body: [
-                'Merging `hacs/integration@main` into `no-repairs` hit a conflict, so the branch was left unchanged.',
+                'Merging the latest hacs/integration release into `no-repairs` hit a conflict, so the branch was left unchanged.',
                 '',
                 'Resolve locally:',
                 '```',
-                'git fetch upstream main && git checkout no-repairs && git merge upstream/main',
+                'git fetch upstream --tags && git checkout no-repairs && git merge <latest release tag>',
                 '```',
                 'Run the fork regression tests before publishing:',
                 '`python -m unittest discover -s tests_fork -v`.',
