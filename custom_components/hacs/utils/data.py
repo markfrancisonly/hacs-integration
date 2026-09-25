@@ -11,7 +11,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from ..base import HacsBase
 from ..const import HACS_REPOSITORY_ID
-from ..enums import HacsGitHubRepo, HacsDisabledReason, HacsDispatchEvent
+from ..enums import HacsDisabledReason, HacsDispatchEvent
 from ..repositories.base import TOPIC_FILTER, HacsManifest, HacsRepository
 from .logger import LOGGER
 from .path import is_safe
@@ -209,13 +209,6 @@ class HacsData:
             if entry not in self.hacs.common.ignored_repositories:
                 self.hacs.common.ignored_repositories.add(entry)
 
-        # This fork is HACS here: a stock install's upstream entry must not come back.
-        repositories = {
-            entry: repo_data
-            for entry, repo_data in repositories.items()
-            if repo_data.get("full_name") != HacsGitHubRepo.UPSTREAM_INTEGRATION
-        }
-
         try:
             await self.register_unknown_repositories(repositories)
 
@@ -249,7 +242,6 @@ class HacsData:
             if (
                 entry == "0"
                 or repo_data.get("category", category) is None
-                or repo_data.get("full_name") == HacsGitHubRepo.UPSTREAM_INTEGRATION
                 or self.hacs.repositories.is_registered(repository_id=entry)
             ):
                 continue

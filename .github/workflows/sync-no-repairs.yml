@@ -91,15 +91,8 @@ jobs:
           set -euo pipefail
           last="$(git describe --tags --abbrev=0 2>/dev/null || true)"
           if [ -n "$last" ] && git diff --quiet "$last" HEAD -- custom_components hacs.json; then
-            if gh release view "$last" >/dev/null 2>&1; then
-              echo "release=false" >> "$GITHUB_OUTPUT"
-              echo "No component change since $last."
-              exit 0
-            fi
-            # Tagged by a run that failed before publishing: release that tag.
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "tagged=true" >> "$GITHUB_OUTPUT"
-            echo "version=$last" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "No component change since $last."
             exit 0
           fi
           # Date versions sort above every upstream release; a second release
@@ -111,42 +104,31 @@ jobs:
           echo "release=true" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Stamp the version and tag
-        if: steps.decide.outputs.release == 'true' && steps.decide.outputs.tagged != 'true'
-        env:
-          VERSION: ${{ steps.decide.outputs.version }}
-        run: |
-          set -euo pipefail
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/hacs/manifest.json
-          if ! git diff --quiet; then
-            git commit -am "Stamp version $VERSION"
-          fi
-          git tag "$VERSION"
-          git push origin no-repairs "refs/tags/$VERSION"
-
       - name: Set up Python
         if: steps.decide.outputs.release == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
+      # As upstream's publish job: the version is stamped into the zip only.
       - name: Build hacs.zip
         if: steps.decide.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
         run: |
           set -euo pipefail
           sed -i "/MINIMUM_HA_VERSION = /c\MINIMUM_HA_VERSION = \"$(jq .homeassistant -r hacs.json)\"" custom_components/hacs/const.py
+          python3 scripts/update/manifest.py --version "$VERSION"
           scripts/install/frontend
           test -f custom_components/hacs/hacs_frontend/version.py
           cd custom_components/hacs && zip -q -r ../../hacs.zip ./
-          unzip -l ../../hacs.zip | tail -1
 
       - name: Publish the release
         if: steps.decide.outputs.release == 'true'
         env:
           VERSION: ${{ steps.decide.outputs.version }}
         run: |
-          set -euo pipefail
-          gh release create "$VERSION" hacs.zip --title "$VERSION" \
+          gh release create "$VERSION" hacs.zip --target "$(git rev-parse HEAD)" --title "$VERSION" \
             --notes "hacs/integration main as of $(date -u +%F), with the auto-update patch."
 
       - name: Open an issue on conflict

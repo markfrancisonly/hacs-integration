@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.loader import async_get_custom_components
 
 from ..const import DOMAIN
-from ..no_repairs import IssueSeverity, async_create_issue
 from ..enums import HacsCategory, HacsDispatchEvent, HacsGitHubRepo, RepositoryFile
 from ..exceptions import AddonRepositoryException, HacsException
+from ..no_repairs import IssueSeverity, async_create_issue
 from ..utils.decode import decode_content
 from ..utils.decorator import concurrent
 from ..utils.filters import get_first_directory_in_directory

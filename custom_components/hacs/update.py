@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base import HacsBase
 from .const import DOMAIN
 from .entity import HacsRepositoryEntity
-from .enums import HacsCategory, HacsDispatchEvent, HacsGitHubRepo
+from .enums import HacsCategory, HacsDispatchEvent
 from .exceptions import HacsException
 
 

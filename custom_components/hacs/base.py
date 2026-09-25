@@ -34,11 +34,6 @@ from homeassistant.loader import Integration
 from homeassistant.util import dt
 
 from .const import DOMAIN, TV, URL_BASE
-from .no_repairs import (
-    IssueSeverity,
-    async_create_issue,
-    async_create_persistent_notification,
-)
 from .coordinator import HacsUpdateCoordinator
 from .data_client import HacsDataClient
 from .enums import (
@@ -58,6 +53,11 @@ from .exceptions import (
     HacsRepositoryArchivedException,
     HacsRepositoryExistException,
     HomeAssistantCoreRepositoryException,
+)
+from .no_repairs import (
+    IssueSeverity,
+    async_create_issue,
+    async_create_persistent_notification,
 )
 from .repositories import REPOSITORY_CLASSES
 from .repositories.base import HACS_MANIFEST_KEYS_TO_EXPORT, REPOSITORY_KEYS_TO_EXPORT
@@ -817,7 +817,11 @@ class HacsBase:
         repository = self.repositories.get_by_full_name(HacsGitHubRepo.INTEGRATION)
         if repository is None:
             return
-        await repository.update_repository(ignore_issues=True, force=True)
+        try:
+            await repository.update_repository(ignore_issues=True, force=True)
+        except HacsException as exception:
+            self.log.warning("Could not check %s for a new release: %s", repository.string, exception)
+            return
         await self.data.async_write()
         self.coordinators[repository.data.category].async_update_listeners()
 
@@ -838,7 +842,7 @@ class HacsBase:
                 )
                 repository = self.repositories.get_by_full_name(HacsGitHubRepo.INTEGRATION)
             elif not self.status.startup:
-                self.log.error("Scheduling update of %s", HacsGitHubRepo.INTEGRATION)
+                self.log.error("Scheduling update of hacs/integration")
                 self.queue.add(repository.common_update())
             if repository is None:
                 raise HacsException("Unknown error")
