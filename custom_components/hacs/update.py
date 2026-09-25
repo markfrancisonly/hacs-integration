@@ -156,18 +156,14 @@ class HacsRepositoryUpdateEntity(HacsRepositoryEntity, UpdateEntity):
 
     @callback
     def _auto_install_if_pending(self) -> None:
-        """Download a new version as soon as it is known, if auto update is on.
-
-        HACS itself is never installed unattended: replacing the running
-        integration from under Home Assistant is a deliberate act."""
+        """Download a new version as soon as it is known, if auto update is on."""
         if (
             not self.hacs.configuration.auto_update
             or not self.hacs.system.auto_update
-            or self.repository.data.full_name == HacsGitHubRepo.INTEGRATION
             or self._auto_install_task is not None
             or self._attr_in_progress
             or not self.available
-            or self.installed_version == self.latest_version
+            or not self.repository.pending_update
         ):
             return
         self._auto_install_task = self.hass.async_create_task(self._async_auto_install())

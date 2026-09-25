@@ -536,6 +536,9 @@ class HacsBase:
             if repository_full_name != HacsGitHubRepo.INTEGRATION:
                 raise HacsExpectedException(f"Skipping {repository_full_name}")
 
+        if repository_full_name == HacsGitHubRepo.UPSTREAM_INTEGRATION:
+            raise HacsExpectedException("Skipping upstream HACS, this fork is HACS here")
+
         if repository_full_name == "home-assistant/core":
             raise HomeAssistantCoreRepositoryException()
 
@@ -805,6 +808,11 @@ class HacsBase:
             return
 
         try:
+            # A stock install leaves upstream HACS in the store as installed;
+            # kept, it would offer the stock release as an "update".
+            if stale := self.repositories.get_by_full_name(HacsGitHubRepo.UPSTREAM_INTEGRATION):
+                self.repositories.unregister(stale)
+                await self.data.async_write(force=True)
             repository = self.repositories.get_by_full_name(HacsGitHubRepo.INTEGRATION)
             should_recreate_entities = False
             if repository is None:
@@ -816,7 +824,7 @@ class HacsBase:
                 )
                 repository = self.repositories.get_by_full_name(HacsGitHubRepo.INTEGRATION)
             elif not self.status.startup:
-                self.log.error("Scheduling update of hacs/integration")
+                self.log.error("Scheduling update of %s", HacsGitHubRepo.INTEGRATION)
                 self.queue.add(repository.common_update())
             if repository is None:
                 raise HacsException("Unknown error")

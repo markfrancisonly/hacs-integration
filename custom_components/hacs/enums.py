@@ -8,7 +8,9 @@ class HacsGitHubRepo(StrEnum):
     """HacsGitHubRepo."""
 
     DEFAULT = "hacs/default"
-    INTEGRATION = "hacs/integration"
+    # This fork updates itself from its own releases.
+    INTEGRATION = "markfrancisonly/hacs-integration"
+    UPSTREAM_INTEGRATION = "hacs/integration"
 
 
 class HacsCategory(StrEnum):
