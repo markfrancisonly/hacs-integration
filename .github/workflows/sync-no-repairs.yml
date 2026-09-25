@@ -72,6 +72,7 @@ jobs:
           grep -q 'from ..no_repairs import' custom_components/hacs/repositories/integration.py
           grep -q 'INTEGRATION = "markfrancisonly/hacs-integration"' custom_components/hacs/enums.py
           grep -q 'UPSTREAM_INTEGRATION' custom_components/hacs/base.py
+          grep -q 'async_refresh_self' custom_components/hacs/base.py
           # No call site may reach the real helpers again.
           ! grep -rn 'from homeassistant.helpers.issue_registry import .*async_create_issue' \
               custom_components/hacs/base.py custom_components/hacs/repositories/integration.py

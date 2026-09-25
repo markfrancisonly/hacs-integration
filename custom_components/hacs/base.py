@@ -29,7 +29,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_FINAL_WRITE, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.loader import Integration
 from homeassistant.util import dt
 
@@ -635,6 +635,13 @@ class HacsBase:
             )
         )
 
+        # This fork is not in the default repository data, so nothing else
+        # would notice its releases.
+        self.recurring_tasks.append(
+            async_track_time_interval(self.hass, self.async_refresh_self, timedelta(hours=6))
+        )
+        self.recurring_tasks.append(async_call_later(self.hass, 300, self.async_refresh_self))
+
         self.recurring_tasks.append(
             async_track_time_interval(
                 self.hass, self.async_get_all_category_repositories, timedelta(hours=6)
@@ -802,6 +809,17 @@ class HacsBase:
 
         if self.configuration.appdaemon:
             self.enable_hacs_category(HacsCategory.APPDAEMON)
+
+    async def async_refresh_self(self, _=None) -> None:
+        """Check this fork's own repository for a new release."""
+        if self.system.disabled or self.stage != HacsStage.RUNNING:
+            return
+        repository = self.repositories.get_by_full_name(HacsGitHubRepo.INTEGRATION)
+        if repository is None:
+            return
+        await repository.update_repository(ignore_issues=True, force=True)
+        await self.data.async_write()
+        self.coordinators[repository.data.category].async_update_listeners()
 
     async def async_load_hacs_from_github(self, _=None) -> None:
         """Load HACS from GitHub."""
