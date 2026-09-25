@@ -249,6 +249,7 @@ class HacsData:
             if (
                 entry == "0"
                 or repo_data.get("category", category) is None
+                or repo_data.get("full_name") == HacsGitHubRepo.UPSTREAM_INTEGRATION
                 or self.hacs.repositories.is_registered(repository_id=entry)
             ):
                 continue

@@ -537,7 +537,8 @@ class HacsBase:
                 raise HacsExpectedException(f"Skipping {repository_full_name}")
 
         if repository_full_name == HacsGitHubRepo.UPSTREAM_INTEGRATION:
-            raise HacsExpectedException("Skipping upstream HACS, this fork is HACS here")
+            self.log.debug("Skipping upstream HACS, this fork is HACS here")
+            return
 
         if repository_full_name == "home-assistant/core":
             raise HomeAssistantCoreRepositoryException()
