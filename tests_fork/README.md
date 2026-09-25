@@ -25,3 +25,8 @@ Update entities register with it and request work on coordinator notifications.
 It rechecks eligibility before each normal update service call. Entity recreation
 pauses and drains it; integration unload stops it. Keep repository downloading,
 compatibility checks, installation, and backup behavior in upstream's installer.
+
+All downloads also take a shared lock at `async_download_repository`, covering
+both the normal update action and the HACS panel. The lock belongs to the Home
+Assistant instance so it survives HACS reloads. The overlap tests run the real
+installer and rollback code, mocking only remote metadata and downloaded content.

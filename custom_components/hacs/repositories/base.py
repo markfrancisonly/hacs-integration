@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from asyncio import sleep
+from asyncio import Lock, sleep
 from datetime import UTC, datetime
 import os
 import pathlib
@@ -1456,6 +1456,14 @@ class HacsRepository:
 
     async def async_download_repository(self, *, ref: str | None = None, **_) -> None:
         """Download the content of a repository."""
+        # Both update.install and the HACS panel use this entry point. Keep the
+        # lock on hass so a reload cannot overlap an old install with a new one.
+        lock = self.hacs.hass.data.setdefault(f"{DOMAIN}_install_lock", Lock())
+        async with lock:
+            await self._async_download_repository(ref=ref)
+
+    async def _async_download_repository(self, *, ref: str | None = None) -> None:
+        """Download while holding the shared installation lock."""
         await self._ensure_download_capabilities(ref)
         self.logger.info("Starting download, %s", ref)
         if self.display_version_or_commit == "version":

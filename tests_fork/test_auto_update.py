@@ -313,3 +313,129 @@ class TestAutoUpdate(IsolatedAsyncioTestCase):
         self.enable()
         await self.finish()
         entity.repository.async_download_repository.assert_awaited_once_with(ref="2026.9.26")
+
+    def use_real_installer(self, entity):
+        """Mock only remote data and content, keeping validation and backup flow real."""
+        repository = entity.repository
+        del repository.async_download_repository
+        repository.get_hacs_json = AsyncMock(return_value=repository.repository_manifest)
+        repository.update_repository = AsyncMock()
+        repository.content.path.local = repository.localpath
+        repository.data.first_install = False
+        target = Path(repository.localpath)
+        target.mkdir(parents=True)
+        original = target / "original.py"
+        original.write_text("working original")
+
+        async def download_content(version):
+            target.mkdir(parents=True, exist_ok=True)
+            original.write_text(version)
+
+        repository.download_content = AsyncMock(side_effect=download_content)
+        return original
+
+    async def check_manual_overlap(self, *, panel=False, replace_hacs=False):
+        first = await self.add_repository("first")
+        second = await self.add_repository("second")
+        first_original = self.use_real_installer(first)
+        second_original = self.use_real_installer(second)
+        started, release, requested = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        self.addCleanup(release.set)
+
+        async def failing_content(version):
+            started.set()  # The actual installer has now created its rollback backup.
+            await release.wait()
+            first.repository.validate.errors.append("simulated download failure")
+
+        first.repository.download_content.side_effect = failing_content
+        second_download = second.repository.async_download_repository
+
+        async def tracked_download(**kwargs):
+            requested.set()
+            await second_download(**kwargs)
+
+        second.repository.async_download_repository = tracked_download
+        self.enable()
+        await asyncio.wait_for(started.wait(), 5)
+        if replace_hacs:
+            # A reload creates a fresh HacsBase while the HomeAssistant object survives.
+            replacement = HacsBase()
+            replacement.hass = self.hass
+            replacement.core.config_path = self.temp.name
+            replacement.core.ha_version = self.hacs.core.ha_version
+            replacement.version = self.hacs.version
+            second.repository.hacs = replacement
+
+        if panel:
+            # The HACS websocket download handler uses this repository entry point.
+            download = second.repository.async_download_repository(ref="2.0.0")
+        else:
+            download = self.hass.services.async_call(
+                "update", "install", {"entity_id": second.entity_id}, blocking=True
+            )
+        manual = asyncio.create_task(download)
+        await asyncio.wait_for(requested.wait(), 5)
+        await asyncio.sleep(0)
+        second.repository.get_hacs_json.assert_not_awaited()
+        second.repository.download_content.assert_not_awaited()
+        self.assertEqual(second_original.read_text(), "working original")
+        with self.assertLogs("custom_components.hacs", level="WARNING"):
+            release.set()
+            await asyncio.wait_for(manual, 5)
+            await self.finish()
+        self.assertEqual(first_original.read_text(), "working original")
+        self.assertEqual(first.installed_version, "1.0.0")
+        self.assertEqual(second_original.read_text(), "2.0.0")
+        second.repository.download_content.assert_awaited_once()
+        first.repository.download_content.assert_awaited_once()
+
+    async def test_manual_update_waits_for_auto_rollback(self):
+        await self.check_manual_overlap()
+
+    async def test_hacs_panel_download_waits_for_auto_rollback(self):
+        await self.check_manual_overlap(panel=True)
+
+    async def test_install_lock_survives_hacs_instance_replacement(self):
+        await self.check_manual_overlap(panel=True, replace_hacs=True)
+
+    async def test_auto_update_waits_for_manual_install(self):
+        first = await self.add_repository("first")
+        second = await self.add_repository("second")
+        first_original = self.use_real_installer(first)
+        second_original = self.use_real_installer(second)
+        started, release, requested = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        self.addCleanup(release.set)
+        first_content = first.repository.download_content.side_effect
+
+        async def held_content(version):
+            started.set()
+            await release.wait()
+            await first_content(version)
+
+        first.repository.download_content.side_effect = held_content
+        second_download = second.repository.async_download_repository
+
+        async def tracked_download(**kwargs):
+            requested.set()
+            await second_download(**kwargs)
+
+        second.repository.async_download_repository = tracked_download
+        manual = asyncio.create_task(
+            self.hass.services.async_call(
+                "update", "install", {"entity_id": first.entity_id}, blocking=True
+            )
+        )
+        await asyncio.wait_for(started.wait(), 5)
+        self.enable()
+        await asyncio.wait_for(requested.wait(), 5)
+        await asyncio.sleep(0)
+        second.repository.get_hacs_json.assert_not_awaited()
+        second.repository.download_content.assert_not_awaited()
+        self.assertEqual(second_original.read_text(), "working original")
+        release.set()
+        await asyncio.wait_for(manual, 5)
+        await self.finish()
+        self.assertEqual(first_original.read_text(), "2.0.0")
+        self.assertEqual(second_original.read_text(), "2.0.0")
+        first.repository.download_content.assert_awaited_once()
+        second.repository.download_content.assert_awaited_once()
